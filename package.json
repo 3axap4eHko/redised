@@ -1,6 +1,6 @@
 {
   "name": "redised",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Redis based Database",
   "main": "index.js",
   "scripts": {
