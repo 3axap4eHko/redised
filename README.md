@@ -4,10 +4,12 @@ Redis based Database
 ## Usage
 
 ``` javascript
-const { Schema, Model, RDB } = require('redised');
+const { Schema, Model, createClient } = require('redised');
+
+const client = createClient();
 
 // await redis connection
-const db = await RDB.connect({});
+await client.connection;
 
 // drop all existing data
 await db.drop();

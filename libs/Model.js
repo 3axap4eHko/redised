@@ -1,4 +1,4 @@
-const RDB = require('./RDB');
+const createClient = require('./redis');
 const sanitize = require('./sanitize');
 
 const nameProp = Symbol('namespace');
@@ -27,7 +27,15 @@ class Model extends Function {
     this[schemaProp] = schema;
     this[fieldsProp] = Object.keys(schema);
     this[indexesProp] = this[fieldsProp].filter(key => schema[key].index);
-    RDB.api.createIndexKeys(name, this[indexesProp]);
+
+    this.db.createNamespaceIndexKeys(name, this[indexesProp]);
+  }
+
+  get db() {
+    if (createClient.defaultClient === null) {
+      throw new Error('Attempt to access db before connection');
+    }
+    return createClient.defaultClient;
   }
 
   create(data) {
@@ -39,34 +47,39 @@ class Model extends Function {
   }
 
   createQuery(data) {
-    const query = this[indexesProp].map(indexKey => indexKey in data ? data[indexKey] : null);
-    query[queryMetaProp] = {};
-    return query;
+    return this[indexesProp].reduce((result, indexKey) => {
+      if (indexKey in data) {
+        result[indexKey] = data[indexKey];
+      }
+      return result;
+    }, {
+      [queryMetaProp]: {},
+    });
   }
 
   async get(id) {
-    return this.create(await RDB.api.get(this[nameProp], id));
+    return this.create(await this.db.get(this[nameProp], id));
   }
 
   async getMany(ids) {
-    return (await RDB.api.getMany(this[nameProp], ids)).map(data => this.create(data));
+    return (await this.db.getMany(this[nameProp], ids)).map(data => this.create(data));
   }
 
   async find(query) {
     const values = this.createQuery(query);
-    return RDB.api.find(this[nameProp], values);
+    return this.db.find(this[nameProp], values);
   }
 
   async set(data) {
-    return RDB.api.set(this[nameProp], this.create(data));
+    return this.db.set(this[nameProp], this.create(data));
   }
 
   async setMany(dataSet) {
-    return RDB.api.setMany(this[nameProp], dataSet.map(data => this.create(data)));
+    return this.db.setMany(this[nameProp], dataSet.map(data => this.create(data)));
   }
 
   async del(...ids) {
-    return RDB.api.del(this[nameProp], ...ids);
+    return this.db.del(this[nameProp], ...ids);
   }
 }
 

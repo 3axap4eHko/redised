@@ -1,10 +1,12 @@
-const RDB = require('../RDB');
+const createClient = require('../redis');
 const Schema = require('../Schema');
 const Model = require('../Model');
 
 const schema = Schema({
   id: Number,
-  flag: { type: Number, index: true },
+  flag1: { type: Number, index: true },
+  flag2: { type: Number, index: true },
+  flag3: { type: Number, index: true },
   number: Number,
   string: String,
   boolean: Boolean,
@@ -12,20 +14,22 @@ const schema = Schema({
 
 const data = {
   id: 1,
-  flag: 2,
+  flag1: 1,
+  flag2: 2,
+  flag3: 3,
   number: '123.456',
   string: 123.456,
   boolean: 0,
 };
 
-const connecting = RDB.connect();
+const client = createClient();
 
 beforeEach(async () => {
-  await connecting;
-  RDB.api.drop();
+  await client.connection;
+  client.drop();
 });
 
-afterAll(() => RDB.api.close());
+afterAll(() => client.close());
 
 test('create model', async () => {
   const TestModel = Model('test', schema);
@@ -45,7 +49,9 @@ test('create entity', async () => {
   const entity = TestModel.create(data);
 
   expect(entity.id).toBeA('number');
-  expect(entity.flag).toBeA('number');
+  expect(entity.flag1).toBeA('number');
+  expect(entity.flag2).toBeA('number');
+  expect(entity.flag3).toBeA('number');
   expect(entity.number).toBeA('number');
   expect(entity.string).toBeA('string');
   expect(entity.boolean).toBeA('boolean');
@@ -64,7 +70,9 @@ test('setMany and getMany entities', async () => {
   const entities = ids.map((v, id) => TestModel.create({
     data,
     id,
-    flag: id % 3,
+    flag1: id % 2,
+    flag2: id % 3,
+    flag3: id % 4,
   }));
 
   await TestModel.setMany(entities);
@@ -75,15 +83,22 @@ test('setMany and getMany entities', async () => {
 
 test('setMany and find entities', async () => {
   const TestModel = Model('test', schema);
-  const ids = Array.from({ length: 100 }).map((v, id) => id);
+  const ids = Array.from({ length: 1000 }).map((v, id) => id);
   const entities = ids.map((v, id) => TestModel.create({
-      ...data,
+    ...data,
     id,
-    flag: id % 2,
+    flag1: id % 2,
+    flag2: id % 3,
+    flag3: id % 4,
   }));
 
   await TestModel.setMany(entities);
-  const restoredEntities = await TestModel.find({ flag: 1 });
-  expect(restoredEntities).toHaveLength(ids.length / 2);
-  restoredEntities.forEach(entity => expect(entity).toMatchObject(entities[entity.id]));
+
+  return Promise.all(Array.from({ length: 3 }).map(async (v, id) => {
+    const flagKey = `flag${id + 1}`;
+    const restoredEntities = await TestModel.find({ [flagKey]: id });
+    expect(restoredEntities).toHaveLength(entities.filter(e => e[flagKey] === id).length);
+    restoredEntities.forEach(entity => expect(entity).toMatchObject(entities[entity.id]));
+
+  }));
 });
