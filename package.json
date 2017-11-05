@@ -1,0 +1,30 @@
+{
+  "name": "redised",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/3axap4eHko/redised.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/3axap4eHko/redised/issues"
+  },
+  "homepage": "https://github.com/3axap4eHko/redised#readme",
+  "dependencies": {
+    "promise-redis": "^0.0.5"
+  },
+  "jest": {
+    "verbose": true,
+    "setupTestFrameworkScriptFile": "./setupJest.js"
+  },
+  "devDependencies": {
+    "jest": "^21.2.1"
+  }
+}
