@@ -29,7 +29,7 @@ afterAll(() => RDB.api.close());
 
 test('create model', async () => {
   const TestModel = Model('test', schema);
-  
+
   expect(TestModel.create).toBeA('function');
   expect(TestModel.createQuery).toBeA('function');
   expect(TestModel.get).toBeA('function');

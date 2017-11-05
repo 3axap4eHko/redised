@@ -1,7 +1,7 @@
 {
   "name": "redised",
   "version": "1.0.0",
-  "description": "",
+  "description": "Redis based Database",
   "main": "index.js",
   "scripts": {
     "test": "jest"
@@ -11,7 +11,7 @@
     "url": "git+https://github.com/3axap4eHko/redised.git"
   },
   "keywords": [],
-  "author": "",
+  "author": "Ivan (3axap4eHko@gmail.com) Zakharchenko",
   "license": "ISC",
   "bugs": {
     "url": "https://github.com/3axap4eHko/redised/issues"
