@@ -32,10 +32,10 @@ class Model extends Function {
   }
 
   get db() {
-    if (createClient.defaultClient === null) {
+    if (createClient.defaultDB === null) {
       throw new Error('Attempt to access db before connection');
     }
-    return createClient.defaultClient;
+    return createClient.defaultDB;
   }
 
   create(data) {
@@ -44,6 +44,10 @@ class Model extends Function {
       origin: { ...entity },
     };
     return entity;
+  }
+
+  getIndexKeys() {
+    return this[indexesProp].slice();
   }
 
   createQuery(data) {
@@ -70,12 +74,20 @@ class Model extends Function {
     return this.db.find(this[nameProp], values);
   }
 
+  async add(data) {
+    return this.db.add(this[nameProp], this[indexesProp], this.create(data));
+  }
+
+  async addMany(dataSet) {
+    return this.db.addMany(this[nameProp], this[indexesProp], dataSet.map(data => this.create(data)));
+  }
+
   async set(data) {
-    return this.db.set(this[nameProp], this.create(data));
+    return this.db.set(this[nameProp], this[indexesProp], this.create(data));
   }
 
   async setMany(dataSet) {
-    return this.db.setMany(this[nameProp], dataSet.map(data => this.create(data)));
+    return this.db.setMany(this[nameProp], this[indexesProp], dataSet.map(data => this.create(data)));
   }
 
   async del(...ids) {

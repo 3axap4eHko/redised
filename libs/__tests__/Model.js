@@ -2,6 +2,8 @@ const createClient = require('../redis');
 const Schema = require('../Schema');
 const Model = require('../Model');
 
+const MODEL_NAME = 'testModel';
+
 const schema = Schema({
   id: Number,
   flag1: { type: Number, index: true },
@@ -32,7 +34,7 @@ beforeEach(async () => {
 afterAll(() => client.close());
 
 test('create model', async () => {
-  const TestModel = Model('test', schema);
+  const TestModel = Model(MODEL_NAME, schema);
 
   expect(TestModel.create).toBeA('function');
   expect(TestModel.createQuery).toBeA('function');
@@ -45,7 +47,7 @@ test('create model', async () => {
 });
 
 test('create entity', async () => {
-  const TestModel = Model('test', schema);
+  const TestModel = Model(MODEL_NAME, schema);
   const entity = TestModel.create(data);
 
   expect(entity.id).toBeA('number');
@@ -58,32 +60,32 @@ test('create entity', async () => {
 });
 
 test('set and get entity', async () => {
-  const TestModel = Model('test', schema);
+  const TestModel = Model(MODEL_NAME, schema);
   const entity = TestModel.create(data);
-  await TestModel.set(entity);
+  await TestModel.add(entity);
   expect(await TestModel.get(1)).toMatchObject(entity);
 });
 
-test('setMany and getMany entities', async () => {
-  const TestModel = Model('test', schema);
-  const ids = Array.from({ length: 100 }).map((v, id) => id);
+test('addMany and getMany entities', async () => {
+  const TestModel = Model(MODEL_NAME, schema);
+  const ids = Array.from({ length: 1000 }).map((v, id) => id);
   const entities = ids.map((v, id) => TestModel.create({
-    data,
+      ...data,
     id,
     flag1: id % 2,
     flag2: id % 3,
     flag3: id % 4,
   }));
-
-  await TestModel.setMany(entities);
+  await TestModel.addMany(entities);
   const restoredEntities = await TestModel.getMany(ids);
   expect(restoredEntities).toHaveLength(ids.length);
   restoredEntities.forEach(entity => expect(entity).toMatchObject(entities[entity.id]));
 });
 
 test('setMany and find entities', async () => {
-  const TestModel = Model('test', schema);
-  const ids = Array.from({ length: 1000 }).map((v, id) => id);
+  jest.setTimeout(100000);
+  const TestModel = Model(MODEL_NAME, schema);
+  const ids = Array.from({ length: 100000 }).map((v, id) => id);
   const entities = ids.map((v, id) => TestModel.create({
     ...data,
     id,
@@ -99,6 +101,5 @@ test('setMany and find entities', async () => {
     const restoredEntities = await TestModel.find({ [flagKey]: id });
     expect(restoredEntities).toHaveLength(entities.filter(e => e[flagKey] === id).length);
     restoredEntities.forEach(entity => expect(entity).toMatchObject(entities[entity.id]));
-
   }));
 });

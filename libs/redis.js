@@ -1,10 +1,8 @@
 const redis = require('promise-redis')();
-const diff = require('./diff');
 const e = require('./escape');
 
 const SCHEMA_PREFIX = `--schema`;
-const KEY_INDEX_PREFIX = [SCHEMA_PREFIX, 'index-key'].join(e.SEPARATOR);
-const FULL_INDEX_PREFIX = [SCHEMA_PREFIX, 'full-index-key'].join(e.SEPARATOR);
+const KEY_INDEX_PREFIX = [SCHEMA_PREFIX, 'index'].join(e.SEPARATOR);
 
 function getKey(prefix, ...args) {
   return [prefix, e(...args)].join(e.SEPARATOR);
@@ -18,17 +16,6 @@ function getIndexValueKey(namespace, indexKey, data) {
   return getKey(KEY_INDEX_PREFIX, namespace, indexKey, data[indexKey]);
 }
 
-function getFullIndexKey(namespace, indexKeys, data) {
-  const values = indexKeys.map(key => data[key]);
-  return getKey(FULL_INDEX_PREFIX, namespace, data.id, ...values);
-}
-
-function fullIndexKeyToId(key) {
-  return key.split(e.SEPARATOR)[7];
-}
-function indexKeyToId(key) {
-  return key.split(e.SEPARATOR)[5];
-}
 function primaryKeyToId(key) {
   return key.split(e.SEPARATOR)[1];
 }
@@ -51,31 +38,67 @@ function createClient(options) {
     return (await c).srem(getKey(KEY_INDEX_PREFIX, namespace), ...keys);
   }
 
-  async function setIndexes(namespace, indexKeys, data) {
+  async function setDataIndexes(namespace, indexKeys, data) {
     const primaryKey = getPrimaryKey(namespace, data.id);
     const indexKeyRefs = indexKeys.map(indexKey => getIndexValueKey(namespace, indexKey, data));
     return Promise.all(indexKeyRefs.map(async indexKeyRef => (await c).sadd(indexKeyRef, primaryKey)));
   }
-  async function unsetIndexes(namespace, indexKeys, data) {
+
+  async function setDataSetIndexes(namespace, indexKeys, dataSet) {
+    const indexes = {};
+    dataSet.forEach(data => {
+      const primaryKey = getPrimaryKey(namespace, data.id);
+      indexKeys.forEach(indexKey => {
+        const key = getIndexValueKey(namespace, indexKey, data);
+        if (!indexes[key]) {
+          indexes[key] = [];
+        }
+        indexes[key].push(primaryKey);
+      });
+    });
+
+    return Promise.all(Object.entries(indexes).map(([key, values]) => db.client.sadd(key, values)));
+  }
+
+  async function unsetDataIndexes(namespace, indexKeys, data) {
     const primaryKey = getPrimaryKey(namespace, data.id);
     const indexKeyRefs = indexKeys.map(indexKey => getIndexValueKey(namespace, indexKey, data));
     return Promise.all(indexKeyRefs.map(async indexKeyRef => (await c).srem(indexKeyRef, primaryKey)));
   }
-  async function updateIndexes(namespace, data) {
+
+  async function unsetDataSetIndexes(namespace, indexKeys, dataSet) {
+    const indexes = {};
+    dataSet.forEach(data => {
+      const primaryKey = getPrimaryKey(namespace, data.id);
+      indexKeys.forEach(indexKey => {
+        const key = getIndexValueKey(namespace, indexKey, data);
+        if (!indexes[key]) {
+          indexes[key] = [];
+        }
+        indexes[key].push(primaryKey);
+      });
+    });
+
+    return Promise.all(Object.entries(indexes).map(([key, values]) => db.client.srem(key, values)));
+  }
+
+  async function updateDataIndexes(namespace, indexKeys, data) {
     if (!data) {
       return null;
     }
-    const indexKeys = await getNamespaceIndexKeys(namespace);
     const prevData = await get(namespace, data.id);
-    const unDiff = diff(data, prevData);
-    await unsetIndexes(namespace, indexKeys, unDiff);
-    const upDiff = diff(prevData, data);
-    return setIndexes(namespace, indexKeys, upDiff);
+    await unsetDataIndexes(namespace, indexKeys, prevData);
+    return setDataIndexes(namespace, indexKeys, data);
   }
 
-  async function keys(namespace, subPattern) {
-    const pattern = [getKey(FULL_INDEX_PREFIX, namespace), '*', subPattern].join(e.SEPARATOR);
-    return (await c).keys(pattern);
+  async function updateDataSetIndexes(namespace, indexKeys, dataSet) {
+    if (!dataSet || !dataSet.length) {
+      return null;
+    }
+    const ids = dataSet.map(data => data.id);
+    const prevDataSet = await getMany(namespace, ids);
+    await unsetDataSetIndexes(namespace, indexKeys, prevDataSet);
+    return setDataSetIndexes(namespace, indexKeys, dataSet);
   }
 
   async function get(namespace, id) {
@@ -84,8 +107,11 @@ function createClient(options) {
   }
 
   async function getMany(namespace, ids) {
+    if (!ids || !ids.length) {
+      return [];
+    }
     const primaryKeys = ids.map(id => getPrimaryKey(namespace, id));
-    const values = await (await c).mget(primaryKeys);
+    const values = (await (await c).mget(primaryKeys)).filter(value => value !== null);
     return JSON.parse(`[ ${values.join(',')} ]`);
   }
 
@@ -103,30 +129,51 @@ function createClient(options) {
     return getMany(namespace, ids);
   }
 
-  async function set(namespace, data) {
-    await updateIndexes(namespace, data);
+  async function add(namespace, indexKeys, data) {
+    await setDataIndexes(namespace, indexKeys, data);
     const primaryKey = getPrimaryKey(namespace, data.id);
     return (await c).set(primaryKey, JSON.stringify(data));
   }
 
-  async function setMany(namespace, dataSet, reindex = true) {
-    const pairs = await Promise.all(dataSet.map(async data => {
-      await updateIndexes(namespace, reindex ? data : null);
-      return [
-        getPrimaryKey(namespace, data.id),
-        JSON.stringify(data),
-      ];
-    }));
-    return (await c).mset(...pairs.reduce((result, pair) => result.concat(pair), []));
+  async function addMany(namespace, indexKeys, dataSet) {
+    if (!dataSet || !dataSet.length) {
+      return [];
+    }
+    await setDataSetIndexes(namespace, indexKeys, dataSet);
+    const values = [];
+    dataSet.forEach(data => {
+      const primaryKey = getPrimaryKey(namespace, data.id);
+      values.push(primaryKey, JSON.stringify(data));
+    });
+    return (await c).mset(values);
+  }
+
+  async function set(namespace, indexKeys, data) {
+    await updateDataIndexes(namespace, indexKeys, data);
+    const primaryKey = getPrimaryKey(namespace, data.id);
+    return (await c).set(primaryKey, JSON.stringify(data));
+  }
+
+  async function setMany(namespace, indexKeys, dataSet) {
+    if (!dataSet || !dataSet.length) {
+      return [];
+    }
+    await updateDataSetIndexes(namespace, indexKeys, dataSet);
+    const values = [];
+    dataSet.forEach(data => {
+      const primaryKey = getPrimaryKey(namespace, data.id);
+      values.push(primaryKey, JSON.stringify(data));
+    });
+    return (await c).mset(values);
   }
 
   async function del(namespace, ...ids) {
-    await updateIndexes(namespace, {});
-    return (await c).del(getPrimaryKey(namespace, ...ids));
+    await updateDataSetIndexes(namespace, ids.map(id => ({ id })));
+    return (await c).del(ids.map(id => getPrimaryKey(namespace, id)));
   }
 
   async function drop() {
-    return (await c).flushall();
+    return (await c).flushdb();
   }
 
   async function close() {
@@ -141,15 +188,21 @@ function createClient(options) {
     createNamespaceIndexKeys,
     deleteNamespaceIndexKeys,
 
-    setIndexes,
-    unsetIndexes,
-    updateIndexes,
+    setDataIndexes,
+    setDataSetIndexes,
 
-    keys,
+    unsetDataIndexes,
+    unsetDataSetIndexes,
+
+    updateDataIndexes,
+    updateDataSetIndexes,
 
     get,
     getMany,
     find,
+
+    add,
+    addMany,
 
     set,
     setMany,
@@ -159,11 +212,11 @@ function createClient(options) {
     close,
   };
 
-  c.then(() => createClient.defaultClient = db);
+  c.then(() => createClient.defaultDB = db);
 
   return db;
 }
 
-createClient.defaultClient = null;
+createClient.defaultDB = null;
 
 module.exports = createClient;

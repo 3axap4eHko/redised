@@ -1,27 +1,24 @@
 const createClient = require('../redis');
 
 const NAMESPACE = 'test';
-const INDEX_KEY = 'flag';
 
-const data = {
-  id: 1,
-  flag: 2,
-  number: '123.456',
-  string: 123.456,
-  boolean: 0,
-};
+const INDEX_KEYS = ['index1', 'index2'];
 
-const client = createClient();
+const db = createClient();
 
-beforeAll(async () => {
-  await client.connection;
-  return client.drop();
+beforeEach(async () => {
+  await db.connection;
 });
 
-afterAll(() => client.close());
+afterAll(() => db.close());
 
-test('test index key', async () => {
-  await client.createNamespaceIndexKeys(NAMESPACE, [INDEX_KEY]);
-  const [indexKey] = await client.getNamespaceIndexKeys(NAMESPACE, [INDEX_KEY]);
-  expect(indexKey).toBe(INDEX_KEY);
+test('test create and delete index keys', async () => {
+  await db.createNamespaceIndexKeys(NAMESPACE, INDEX_KEYS);
+  const indexKeys = await db.getNamespaceIndexKeys(NAMESPACE);
+  expect(indexKeys.sort()).toMatchObject(INDEX_KEYS.sort());
+  await db.deleteNamespaceIndexKeys(NAMESPACE, INDEX_KEYS);
+  const noIndexKeys = await db.getNamespaceIndexKeys(NAMESPACE);
+  expect(noIndexKeys).toMatchObject([]);
 });
+
+
