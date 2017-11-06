@@ -27,8 +27,6 @@ class Model extends Function {
     this[schemaProp] = schema;
     this[fieldsProp] = Object.keys(schema);
     this[indexesProp] = this[fieldsProp].filter(key => schema[key].index);
-
-    this.db.createNamespaceIndexKeys(name, this[indexesProp]);
   }
 
   get db() {
@@ -50,17 +48,6 @@ class Model extends Function {
     return this[indexesProp].slice();
   }
 
-  createQuery(data) {
-    return this[indexesProp].reduce((result, indexKey) => {
-      if (indexKey in data) {
-        result[indexKey] = data[indexKey];
-      }
-      return result;
-    }, {
-      [queryMetaProp]: {},
-    });
-  }
-
   async get(id) {
     return this.create(await this.db.get(this[nameProp], id));
   }
@@ -70,8 +57,15 @@ class Model extends Function {
   }
 
   async find(query) {
-    const values = this.createQuery(query);
-    return this.db.find(this[nameProp], values);
+    const data = this[indexesProp].reduce((result, indexKey) => {
+      if (indexKey in query) {
+        result[indexKey] = query[indexKey];
+      }
+      return result;
+    }, {
+      [queryMetaProp]: {},
+    });
+    return this.db.find(this[nameProp], this[indexesProp], data);
   }
 
   async add(data) {

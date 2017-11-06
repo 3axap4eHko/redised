@@ -37,7 +37,6 @@ test('create model', async () => {
   const TestModel = Model(MODEL_NAME, schema);
 
   expect(TestModel.create).toBeA('function');
-  expect(TestModel.createQuery).toBeA('function');
   expect(TestModel.get).toBeA('function');
   expect(TestModel.getMany).toBeA('function');
   expect(TestModel.find).toBeA('function');
@@ -62,11 +61,11 @@ test('create entity', async () => {
 test('set and get entity', async () => {
   const TestModel = Model(MODEL_NAME, schema);
   const entity = TestModel.create(data);
-  await TestModel.add(entity);
+  await TestModel.set(entity);
   expect(await TestModel.get(1)).toMatchObject(entity);
 });
 
-test('addMany and getMany entities', async () => {
+test('setMany and getMany entities', async () => {
   const TestModel = Model(MODEL_NAME, schema);
   const ids = Array.from({ length: 1000 }).map((v, id) => id);
   const entities = ids.map((v, id) => TestModel.create({
@@ -76,7 +75,7 @@ test('addMany and getMany entities', async () => {
     flag2: id % 3,
     flag3: id % 4,
   }));
-  await TestModel.addMany(entities);
+  await TestModel.setMany(entities);
   const restoredEntities = await TestModel.getMany(ids);
   expect(restoredEntities).toHaveLength(ids.length);
   restoredEntities.forEach(entity => expect(entity).toMatchObject(entities[entity.id]));
