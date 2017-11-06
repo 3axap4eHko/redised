@@ -1,5 +1,6 @@
 # REDISed
 Redis based Database
+[![build status](https://travis-ci.org/3axap4eHko/redised.svg?branch=master)](https://travis-ci.org/3axap4eHko/redised)
 
 ## Usage
 

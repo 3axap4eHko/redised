@@ -20,5 +20,3 @@ test('test create and delete index keys', async () => {
   const noIndexKeys = await db.getNamespaceIndexKeys(NAMESPACE);
   expect(noIndexKeys).toMatchObject([]);
 });
-
-
